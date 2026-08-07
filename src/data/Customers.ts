@@ -1,7 +1,7 @@
 import {Customer} from '@/types/Customer';
 
 export const customers: Customer[] = [
-         {
+  {
     id: "C001",
     name: "John Doe",
     email: "john@example.com",
@@ -27,4 +27,4 @@ export const customers: Customer[] = [
     damaged: false,
     refundCount: 1,
   },
-]
+];
