@@ -13,6 +13,7 @@ export const customers: Customer[] = [
     price: 999,
     damaged: false,
     refundCount: 0,
+    orderStatus: "delivered",
   },
   {
     id: "C002",
@@ -26,5 +27,6 @@ export const customers: Customer[] = [
     price: 1999,
     damaged: false,
     refundCount: 1,
+    orderStatus: "delivered",
   },
 ];

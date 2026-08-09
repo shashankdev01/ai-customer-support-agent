@@ -10,4 +10,6 @@ export interface Customer {
   price: number;
   damaged: boolean;
   refundCount: number;
+
+  orderStatus: "processing" | "shipped" | "delivered";
 }
