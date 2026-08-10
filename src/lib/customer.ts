@@ -12,6 +12,13 @@ export function findCustomerByOrderId(orderId: string) {
   );
 }
 
+export function findCustomerByName(name: string) {
+  return customers.find(
+    (customer) =>
+      customer.name.toLowerCase() === name.toLowerCase()
+  );
+}
+
 export function getAllCustomers() {
   return customers;
 }

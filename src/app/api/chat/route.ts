@@ -1,8 +1,9 @@
 import OpenAI from "openai";
 import { NextResponse } from "next/server";
-import { findCustomerByOrderId } from "@/lib/customer";
+import { findCustomerByOrderId,findCustomerByName } from "@/lib/customer";
 import { checkRefundEligibility } from "@/lib/refund";
 import { getOrderStatus } from "@/lib/order";
+import { customers } from "@/data/Customers";
 
 const client = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY!,
@@ -15,15 +16,29 @@ export async function POST(req: Request) {
     const { message } = await req.json();
 
     // Find an order ID like ORD1001 or ORD-1001
-    const orderMatch = message.match(/ORD-?\d+/i);
+ const orderMatch = message.match(/ORD-?\d+/i);
 
-    let customer = null;
+let customer = null;
 
-    if (orderMatch) {
-      const orderId = orderMatch[0].replace("-", "").toUpperCase();
+// Try order ID first
+if (orderMatch) {
+  const orderId = orderMatch[0]
+    .replace("-", "")
+    .toUpperCase();
 
-      customer = findCustomerByOrderId(orderId);
-    }
+  customer = findCustomerByOrderId(orderId);
+}
+
+// If no order ID, try matching a customer by name
+if (!customer) {
+  const customerName = customers.find((customer) =>
+    message.toLowerCase().includes(customer.name.toLowerCase())
+  );
+
+  if (customerName) {
+    customer = findCustomerByName(customerName.name);
+  }
+}
 
     console.log("Detected customer:", customer);
 
