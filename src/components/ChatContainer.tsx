@@ -47,6 +47,7 @@ const handleSend = async () => {
       },
       body: JSON.stringify({
         message: userMessage,
+        history: messages,
       }),
     });
 
