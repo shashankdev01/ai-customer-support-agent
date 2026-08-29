@@ -7,9 +7,11 @@ import {
   findCustomerByEmail,
 } from "@/lib/customer";
 
+import { getRefundStatus } from "@/lib/refundStatus";
 import { checkRefundEligibility } from "@/lib/refund";
 import { getOrderStatus } from "@/lib/order";
 import { customers } from "@/data/Customers";
+import { updateRefundStatus } from "@/lib/updateRefundStatus";
 import { refundPolicy } from "@/lib/refundPolicy";
 import { getProductInfo } from "@/lib/product";
 import { detectIntent } from "@/lib/intent";
@@ -25,21 +27,15 @@ export async function POST(req: Request) {
   try {
     const { message, history } = await req.json();
 
-    // --------------------------------------------------
-    // 1. DETECT INTENT
-    // --------------------------------------------------
-
+    // 1. Detect intent
     const intent = detectIntent(message);
 
     console.log("Detected intent:", intent);
 
-    // --------------------------------------------------
-    // 2. CUSTOMER LOOKUP
-    // --------------------------------------------------
-
+    // 2. Customer lookup
     let customer = null;
 
-    // Find customer by Order ID
+    // Find by Order ID
     const orderMatch = message.match(/ORD-?\d+/i);
 
     if (orderMatch) {
@@ -50,7 +46,7 @@ export async function POST(req: Request) {
       customer = findCustomerByOrderId(orderId);
     }
 
-    // Find customer by Email
+    // Find by Email
     if (!customer) {
       const emailMatch = message.match(
         /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/
@@ -63,25 +59,18 @@ export async function POST(req: Request) {
       }
     }
 
-    // Find customer by Name
+    // Find by Name
     if (!customer) {
       const customerName = customers.find((c) =>
-        message
-          .toLowerCase()
-          .includes(c.name.toLowerCase())
+        message.toLowerCase().includes(c.name.toLowerCase())
       );
 
       if (customerName) {
-        customer = findCustomerByName(
-          customerName.name
-        );
+        customer = findCustomerByName(customerName.name);
       }
     }
 
-    // --------------------------------------------------
-    // 3. CHECK PREVIOUS CHAT HISTORY
-    // --------------------------------------------------
-
+    // 3. Check previous conversation
     if (!customer && Array.isArray(history)) {
       for (const chat of [...history].reverse()) {
         if (chat.sender !== "user") {
@@ -120,7 +109,7 @@ export async function POST(req: Request) {
           }
         }
 
-        // Previous Customer Name
+        // Previous Name
         const previousCustomer = customers.find((c) =>
           chat.text
             .toLowerCase()
@@ -141,16 +130,13 @@ export async function POST(req: Request) {
 
     console.log("Detected customer:", customer);
 
-    // --------------------------------------------------
-    // 4. REFUND / ORDER / PRODUCT RESULTS
-    // --------------------------------------------------
-
+    // 4. Business logic
     let refundResult = null;
+    let refundRequest = null;
     let orderResult = null;
     let productResult = null;
-    let refundRequest = null;
-
-
+    let refundStatus = null;  
+    let updatedRefund = null;
     // Refund
     if (customer && intent === "refund") {
       refundResult = checkRefundEligibility(customer);
@@ -158,7 +144,7 @@ export async function POST(req: Request) {
       console.log("Refund Result:", refundResult);
 
       if (refundResult.eligible) {
-        refundRequest = createRefundRequest(customer);
+        refundRequest = await createRefundRequest(customer);
 
         console.log(
           "Refund Request:",
@@ -166,35 +152,32 @@ export async function POST(req: Request) {
         );
       }
     }
+// refund status 
+    if (
+  customer &&
+  (message.toLowerCase().includes("refund status") ||
+    message.toLowerCase().includes("status of my refund"))
+) {
+  refundStatus = await getRefundStatus(customer.orderId);
+
+  console.log("Refund Status:", refundStatus);
+}
 
     // Order
     if (customer && intent === "order") {
-      orderResult = getOrderStatus(
-        customer.orderId
-      );
+      orderResult = getOrderStatus(customer.orderId);
 
-      console.log(
-        "Order Result:",
-        orderResult
-      );
+      console.log("Order Result:", orderResult);
     }
 
     // Product
     if (customer) {
-      productResult = getProductInfo(
-        customer.product
-      );
+      productResult = getProductInfo(customer.product);
 
-      console.log(
-        "Product Result:",
-        productResult
-      );
+      console.log("Product Result:", productResult);
     }
 
-    // --------------------------------------------------
-    // 5. CUSTOMER CONTEXT
-    // --------------------------------------------------
-
+    // 5. Customer context
     const customerContext = customer
       ? `
 Customer information:
@@ -246,9 +229,8 @@ Price: ₹${productResult.price}
         : ""
       }
 
-      ${
-  refundRequest
-    ? `
+${refundRequest
+        ? `
 Refund request:
 
 Request ID: ${refundRequest.requestId}
@@ -257,15 +239,25 @@ Amount: ₹${refundRequest.amount}
 Status: ${refundRequest.status}
 Created At: ${refundRequest.createdAt}
 `
+        : ""
+      }
+      ${
+  refundStatus
+    ? `
+Refund status:
+
+Request ID: ${refundStatus.requestId}
+Order ID: ${refundStatus.orderId}
+Amount: ₹${refundStatus.amount}
+Status: ${refundStatus.status}
+Created At: ${refundStatus.createdAt}
+`
     : ""
 }
 `
       : "No customer information was found.";
 
-    // --------------------------------------------------
-    // 6. REFUND POLICY CONTEXT
-    // --------------------------------------------------
-
+    // 6. Refund policy
     const policyContext =
       intent === "policy"
         ? `
@@ -275,10 +267,7 @@ ${refundPolicy}
 `
         : "";
 
-    // --------------------------------------------------
-    // 7. CONVERSATION HISTORY
-    // --------------------------------------------------
-
+    // 7. Conversation history
     const conversationHistory: Array<{
       role: "user" | "assistant";
       content: string;
@@ -286,16 +275,25 @@ ${refundPolicy}
         ? history.map((chat: any) => ({
           role:
             chat.sender === "user"
-              ? ("user" as const)
-              : ("assistant" as const),
+              ? "user"
+              : "assistant",
           content: String(chat.text || ""),
         }))
         : [];
+        const lowerMessage = message.toLowerCase();
 
-    // --------------------------------------------------
-    // 8. SEND REQUEST TO AI
-    // --------------------------------------------------
+if (lowerMessage.includes("approve refund")) {
+  const requestIdMatch = message.match(/REF-\d+/i);
 
+  if (requestIdMatch) {
+    updatedRefund = await updateRefundStatus(
+      requestIdMatch[0].toUpperCase(),
+      "approved"
+    );
+  }
+}
+
+    // 8. AI request
     const completion =
       await client.chat.completions.create({
         model: "google/gemini-2.5-flash",
@@ -307,7 +305,7 @@ ${refundPolicy}
             content: `
 You are an AI customer support assistant.
 
-Your job is to help customers with:
+Help customers with:
 
 - Orders
 - Refunds
@@ -331,17 +329,17 @@ IMPORTANT RULES:
 
 5. Never invent refund policies.
 
-6. If refund eligibility is false, clearly explain the provided reason.
+6. If refund eligibility is false, explain the provided reason.
 
-7. If refund eligibility is true, clearly explain that the customer is eligible.
+7. If refund eligibility is true, explain that the customer is eligible.
 
 8. If the user asks about an order, use the provided order information.
 
 9. If the user asks about the refund policy, use ONLY the provided Refund Policy.
 
-10. If no customer information is available and the user asks for specific customer or order information, politely ask for an Order ID, customer name, or email.
+10. If customer information is unavailable for a specific customer question, ask for an Order ID, customer name, or email.
 
-11. If the user asks for the general refund policy, customer information is NOT required.
+11. General refund policy questions do not require customer information.
 
 12. Do not create fake support emails, phone numbers, links, or policies.
 
@@ -349,39 +347,35 @@ IMPORTANT RULES:
 
 14. Display email addresses as plain text.
 
-15. If the user asks for the refund policy, refund rules, refund guidelines, or return policy, provide ALL available refund policy rules.
+15. When asked for the refund policy, provide ALL available rules.
 
-16. Do not summarize the policy unless the user specifically asks for a summary.
+16. Do not summarize the policy unless specifically asked.
 
 17. If the user asks about the product, use the provided Product information.
 
 18. Never invent product information, features, specifications, or prices.
 
-19. Use the conversation history to understand follow-up questions.
+19. Use conversation history for follow-up questions.
 
-20. If the customer has already provided their email, name, or order ID earlier in the conversation, do not ask for it again when that information is available.
+20. Do not ask for information already provided earlier in the conversation.
 
 21. Do not use Markdown formatting.
 
-22. Do not use asterisks (*) for bullets or bold text.
+22. Do not use asterisks for bullets or bold text.
 
 23. Use plain text only.
 
-24. When listing information, put each item on a separate line.
+24. Put each item on a separate line.
 
-25. If a refund request was created, clearly tell the customer that the request has been created and provide the Refund Request ID.
+25. If a refund request was created, tell the customer that it was created and provide the Refund Request ID.
 
-26. Never claim that a refund request was created unless Refund Request information is provided in the context.
+26. Never claim a refund request was created unless Refund Request information exists in the context.
 
---------------------------------
-CUSTOMER CONTEXT
---------------------------------
+CUSTOMER CONTEXT:
 
 ${customerContext}
 
---------------------------------
-POLICY CONTEXT
---------------------------------
+POLICY CONTEXT:
 
 ${policyContext}
 `,
@@ -398,10 +392,7 @@ ${policyContext}
         max_tokens: 300,
       });
 
-    // --------------------------------------------------
-    // 9. CLEAN AI RESPONSE
-    // --------------------------------------------------
-
+    // 9. Clean response
     const reply =
       completion.choices[0].message.content || "";
 
@@ -411,10 +402,7 @@ ${policyContext}
       .replace(/^[-•]\s+/gm, "")
       .trim();
 
-    // --------------------------------------------------
-    // 10. RETURN RESPONSE
-    // --------------------------------------------------
-
+    // 10. Return response
     return NextResponse.json({
       reply: cleanReply,
     });

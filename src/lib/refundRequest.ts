@@ -1,16 +1,22 @@
 import { Customer } from "@/types/Customer";
+import { connectDB } from "@/lib/mongodb";
+import { RefundRequest } from "@/models/RefundRequest";
 
-export function createRefundRequest(customer: Customer) {
-    const requestId =
-        "REF-" + Date.now().toString().slice(-6);
+export async function createRefundRequest(customer: Customer) {
+  await connectDB();
 
-    return {
-        requestId,
-        customerId: customer.id,
-        orderId: customer.orderId,
-        customerName: customer.name,
-        amount: customer.price,
-        status: "pending",
-        createdAt: new Date().toISOString(),
-    };
+  const requestId =
+    "REF-" + Date.now().toString().slice(-6);
+
+  const refundRequest = await RefundRequest.create({
+    requestId,
+    customerId: customer.id,
+    orderId: customer.orderId,
+    customerName: customer.name,
+    product: customer.product,
+    amount: customer.price,
+    status: "pending",
+  });
+
+  return refundRequest;
 }
