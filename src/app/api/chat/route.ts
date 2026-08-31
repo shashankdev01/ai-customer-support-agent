@@ -135,7 +135,7 @@ export async function POST(req: Request) {
     let refundRequest = null;
     let orderResult = null;
     let productResult = null;
-    let refundStatus = null;  
+    let refundStatus = null;
     let updatedRefund = null;
     // Refund
     if (customer && intent === "refund") {
@@ -152,16 +152,16 @@ export async function POST(req: Request) {
         );
       }
     }
-// refund status 
+    // refund status 
     if (
-  customer &&
-  (message.toLowerCase().includes("refund status") ||
-    message.toLowerCase().includes("status of my refund"))
-) {
-  refundStatus = await getRefundStatus(customer.orderId);
+      customer &&
+      (message.toLowerCase().includes("refund status") ||
+        message.toLowerCase().includes("status of my refund"))
+    ) {
+      refundStatus = await getRefundStatus(customer.orderId);
 
-  console.log("Refund Status:", refundStatus);
-}
+      console.log("Refund Status:", refundStatus);
+    }
 
     // Order
     if (customer && intent === "order") {
@@ -241,9 +241,8 @@ Created At: ${refundRequest.createdAt}
 `
         : ""
       }
-      ${
-  refundStatus
-    ? `
+      ${refundStatus
+        ? `
 Refund status:
 
 Request ID: ${refundStatus.requestId}
@@ -252,8 +251,8 @@ Amount: ₹${refundStatus.amount}
 Status: ${refundStatus.status}
 Created At: ${refundStatus.createdAt}
 `
-    : ""
-}
+        : ""
+      }
 `
       : "No customer information was found.";
 
@@ -280,18 +279,34 @@ ${refundPolicy}
           content: String(chat.text || ""),
         }))
         : [];
-        const lowerMessage = message.toLowerCase();
+    const lowerMessage = message.toLowerCase();
 
-if (lowerMessage.includes("approve refund")) {
-  const requestIdMatch = message.match(/REF-\d+/i);
+    if (
+      lowerMessage.includes("approve refund") ||
+      lowerMessage.includes("reject refund") ||
+      lowerMessage.includes("complete refund")
+    ) {
+      const requestIdMatch = message.match(/REF-\d+/i);
 
-  if (requestIdMatch) {
-    updatedRefund = await updateRefundStatus(
-      requestIdMatch[0].toUpperCase(),
-      "approved"
-    );
-  }
-}
+      if (requestIdMatch) {
+        let status = "";
+
+        if (lowerMessage.includes("approve refund")) {
+          status = "approved";
+        } else if (lowerMessage.includes("reject refund")) {
+          status = "rejected";
+        } else if (lowerMessage.includes("complete refund")) {
+          status = "completed";
+        }
+
+        updatedRefund = await updateRefundStatus(
+          requestIdMatch[0].toUpperCase(),
+          status
+        );
+
+        console.log("Updated Refund:", updatedRefund);
+      }
+    }
 
     // 8. AI request
     const completion =
