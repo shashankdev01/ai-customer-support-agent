@@ -17,7 +17,6 @@ import { getProductInfo } from "@/lib/product";
 import { detectIntent } from "@/lib/intent";
 import { createRefundRequest } from "@/lib/refundRequest";
 
-
 const client = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY!,
   baseURL: "https://openrouter.ai/api/v1",
@@ -137,14 +136,78 @@ export async function POST(req: Request) {
     let productResult = null;
     let refundStatus = null;
     let updatedRefund = null;
-    // Refund
-    if (customer && intent === "refund") {
+
+    const lowerMessage = message.toLowerCase();
+
+    // --------------------------------------------------
+    // REFUND STATUS UPDATE
+    // --------------------------------------------------
+    // IMPORTANT:
+    // This must happen BEFORE refund creation.
+    // Otherwise "Approve refund" can accidentally create
+    // a new pending refund request.
+    //
+    if (
+      customer &&
+      (
+        lowerMessage.includes("approve refund") ||
+        lowerMessage.includes("reject refund") ||
+        lowerMessage.includes("complete refund")
+      )
+    ) {
+      let status = "";
+
+      if (lowerMessage.includes("approve refund")) {
+        status = "approved";
+      } else if (
+        lowerMessage.includes("reject refund")
+      ) {
+        status = "rejected";
+      } else if (
+        lowerMessage.includes("complete refund")
+      ) {
+        status = "completed";
+      }
+
+      if (status) {
+        updatedRefund = await updateRefundStatus(
+          customer.orderId,
+          status
+        );
+
+        console.log(
+          "Updated Refund:",
+          updatedRefund
+        );
+      }
+    }
+
+    // --------------------------------------------------
+    // REFUND REQUEST CREATION
+    // --------------------------------------------------
+    // Do NOT create a new refund request when the user
+    // is approving/rejecting/completing an existing one.
+    //
+    const isRefundStatusUpdate =
+      lowerMessage.includes("approve refund") ||
+      lowerMessage.includes("reject refund") ||
+      lowerMessage.includes("complete refund");
+
+    if (
+      customer &&
+      intent === "refund" &&
+      !isRefundStatusUpdate
+    ) {
       refundResult = checkRefundEligibility(customer);
 
-      console.log("Refund Result:", refundResult);
+      console.log(
+        "Refund Result:",
+        refundResult
+      );
 
       if (refundResult.eligible) {
-        refundRequest = await createRefundRequest(customer);
+        refundRequest =
+          await createRefundRequest(customer);
 
         console.log(
           "Refund Request:",
@@ -152,32 +215,72 @@ export async function POST(req: Request) {
         );
       }
     }
-    // refund status 
+
+    // --------------------------------------------------
+    // REFUND ELIGIBILITY
+    // --------------------------------------------------
     if (
       customer &&
-      (message.toLowerCase().includes("refund status") ||
-        message.toLowerCase().includes("status of my refund"))
+      intent === "refund" &&
+      !refundResult
     ) {
-      refundStatus = await getRefundStatus(customer.orderId);
+      refundResult =
+        checkRefundEligibility(customer);
 
-      console.log("Refund Status:", refundStatus);
+      console.log(
+        "Refund Result:",
+        refundResult
+      );
     }
 
-    // Order
+    // --------------------------------------------------
+    // REFUND STATUS
+    // --------------------------------------------------
+    if (
+      customer &&
+      (
+        lowerMessage.includes("refund status") ||
+        lowerMessage.includes("status of my refund")
+      )
+    ) {
+      refundStatus =
+        await getRefundStatus(customer.orderId);
+
+      console.log(
+        "Refund Status:",
+        refundStatus
+      );
+    }
+
+    // --------------------------------------------------
+    // ORDER
+    // --------------------------------------------------
     if (customer && intent === "order") {
-      orderResult = getOrderStatus(customer.orderId);
+      orderResult =
+        getOrderStatus(customer.orderId);
 
-      console.log("Order Result:", orderResult);
+      console.log(
+        "Order Result:",
+        orderResult
+      );
     }
 
-    // Product
+    // --------------------------------------------------
+    // PRODUCT
+    // --------------------------------------------------
     if (customer) {
-      productResult = getProductInfo(customer.product);
+      productResult =
+        getProductInfo(customer.product);
 
-      console.log("Product Result:", productResult);
+      console.log(
+        "Product Result:",
+        productResult
+      );
     }
 
+    // --------------------------------------------------
     // 5. Customer context
+    // --------------------------------------------------
     const customerContext = customer
       ? `
 Customer information:
@@ -193,8 +296,9 @@ Price: ₹${customer.price}
 Damaged: ${customer.damaged}
 Previous Refunds: ${customer.refundCount}
 
-${refundResult
-        ? `
+${
+  refundResult
+    ? `
 Refund eligibility:
 
 Eligible: ${refundResult.eligible}
@@ -202,11 +306,12 @@ Reason: ${refundResult.reason}
 Refund Amount: ₹${refundResult.refundAmount}
 Manager Approval Required: ${refundResult.managerApprovalRequired}
 `
-        : ""
-      }
+    : ""
+}
 
-${orderResult
-        ? `
+${
+  orderResult
+    ? `
 Order information:
 
 Order ID: ${orderResult.orderId}
@@ -215,22 +320,24 @@ Product: ${orderResult.product}
 Status: ${orderResult.status}
 Delivered Date: ${orderResult.deliveredDate}
 `
-        : ""
-      }
+    : ""
+}
 
-${productResult
-        ? `
+${
+  productResult
+    ? `
 Product information:
 
 Product: ${productResult.product}
 Product Type: ${productResult.productType}
 Price: ₹${productResult.price}
 `
-        : ""
-      }
+    : ""
+}
 
-${refundRequest
-        ? `
+${
+  refundRequest
+    ? `
 Refund request:
 
 Request ID: ${refundRequest.requestId}
@@ -239,10 +346,12 @@ Amount: ₹${refundRequest.amount}
 Status: ${refundRequest.status}
 Created At: ${refundRequest.createdAt}
 `
-        : ""
-      }
-      ${refundStatus
-        ? `
+    : ""
+}
+
+${
+  refundStatus
+    ? `
 Refund status:
 
 Request ID: ${refundStatus.requestId}
@@ -251,12 +360,28 @@ Amount: ₹${refundStatus.amount}
 Status: ${refundStatus.status}
 Created At: ${refundStatus.createdAt}
 `
-        : ""
-      }
+    : ""
+}
+
+${
+  updatedRefund
+    ? `
+Updated refund:
+
+Request ID: ${updatedRefund.requestId}
+Order ID: ${updatedRefund.orderId}
+Amount: ₹${updatedRefund.amount}
+Status: ${updatedRefund.status}
+Created At: ${updatedRefund.createdAt}
+`
+    : ""
+}
 `
       : "No customer information was found.";
 
+    // --------------------------------------------------
     // 6. Refund policy
+    // --------------------------------------------------
     const policyContext =
       intent === "policy"
         ? `
@@ -266,49 +391,25 @@ ${refundPolicy}
 `
         : "";
 
+    // --------------------------------------------------
     // 7. Conversation history
+    // --------------------------------------------------
     const conversationHistory: Array<{
       role: "user" | "assistant";
       content: string;
     }> = Array.isArray(history)
-        ? history.map((chat: any) => ({
+      ? history.map((chat: any) => ({
           role:
             chat.sender === "user"
               ? "user"
               : "assistant",
           content: String(chat.text || ""),
         }))
-        : [];
-    const lowerMessage = message.toLowerCase();
+      : [];
 
-    if (
-      lowerMessage.includes("approve refund") ||
-      lowerMessage.includes("reject refund") ||
-      lowerMessage.includes("complete refund")
-    ) {
-      const requestIdMatch = message.match(/REF-\d+/i);
-
-      if (requestIdMatch) {
-        let status = "";
-
-        if (lowerMessage.includes("approve refund")) {
-          status = "approved";
-        } else if (lowerMessage.includes("reject refund")) {
-          status = "rejected";
-        } else if (lowerMessage.includes("complete refund")) {
-          status = "completed";
-        }
-
-        updatedRefund = await updateRefundStatus(
-          requestIdMatch[0].toUpperCase(),
-          status
-        );
-
-        console.log("Updated Refund:", updatedRefund);
-      }
-    }
-
+    // --------------------------------------------------
     // 8. AI request
+    // --------------------------------------------------
     const completion =
       await client.chat.completions.create({
         model: "google/gemini-2.5-flash",
@@ -386,6 +487,12 @@ IMPORTANT RULES:
 
 26. Never claim a refund request was created unless Refund Request information exists in the context.
 
+27. If a refund was updated, use the Updated refund information provided in the context.
+
+28. If the refund status was updated successfully, clearly tell the user the new refund status.
+
+29. Do not create a new refund request when the user is approving, rejecting, or completing an existing refund.
+
 CUSTOMER CONTEXT:
 
 ${customerContext}
@@ -407,7 +514,9 @@ ${policyContext}
         max_tokens: 300,
       });
 
+    // --------------------------------------------------
     // 9. Clean response
+    // --------------------------------------------------
     const reply =
       completion.choices[0].message.content || "";
 
@@ -417,7 +526,9 @@ ${policyContext}
       .replace(/^[-•]\s+/gm, "")
       .trim();
 
+    // --------------------------------------------------
     // 10. Return response
+    // --------------------------------------------------
     return NextResponse.json({
       reply: cleanReply,
     });
