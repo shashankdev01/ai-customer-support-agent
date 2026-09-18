@@ -2,6 +2,7 @@ export interface Customer {
   id: string;
   name: string;
   email: string;
+  password: string,
   orderId: string;
   product: string;
   productType: "physical" | "digital";

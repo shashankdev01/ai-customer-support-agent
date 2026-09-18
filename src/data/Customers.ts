@@ -9,13 +9,16 @@ export const customers: Customer[] = [
     orderId: "ORD1001",
     product: "Wireless Mouse",
     productType: "physical",
-purchaseDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)
-  .toISOString()
-  .split("T")[0],
+    password: "12345678",
 
-deliveredDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
-  .toISOString()
-  .split("T")[0],
+
+    purchaseDate: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0],
+
+    deliveredDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
+    .toISOString()
+    .split("T")[0],
     price: 999,
     damaged: false,
     refundCount: 0,
@@ -27,6 +30,7 @@ deliveredDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
     id: "C002",
     name: "Sarah Smith",
     email: "sarah@example.com",
+    password: "12345678",
     orderId: "ORD1002",
     product: "React Masterclass",
     productType: "digital",
@@ -43,6 +47,7 @@ deliveredDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
     id: "C003",
     name: "Mike Johnson",
     email: "mike@example.com",
+    password: "12345678",
     orderId: "ORD1003",
     product: "Bluetooth Headphones",
     productType: "physical",
@@ -59,6 +64,7 @@ deliveredDate: "2026-08-03",
     id: "C004",
     name: "Alex Brown",
     email: "alex@example.com",
+    password: "12345678",
     orderId: "ORD1004",
     product: "Mechanical Keyboard",
     productType: "physical",
@@ -75,6 +81,7 @@ deliveredDate: "2026-08-03",
     id: "C005",
     name: "David Wilson",
     email: "david@example.com",
+    password: "12345678",
     orderId: "ORD1005",
     product: "Gaming Monitor",
     productType: "physical",
@@ -91,6 +98,7 @@ deliveredDate: "2026-07-12",
     id: "C006",
     name: "Priya Sharma",
     email: "priya@example.com",
+    password: "12345678",
     orderId: "ORD1006",
     product: "Professional Laptop",
     productType: "physical",
